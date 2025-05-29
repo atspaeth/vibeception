@@ -8,6 +8,7 @@ import re
 
 parser = argparse.ArgumentParser(description='Chat with Claude')
 parser.add_argument('--context', action='append', help='Context file to include')
+parser.add_argument('--system', default='system.txt', help='System prompt file (default: system.txt)')
 parser.add_argument('prompt', help='The prompt to send')
 
 args = parser.parse_args()
@@ -42,15 +43,32 @@ headers = {
     'content-type': 'application/json'
 }
 
+# Prepare messages array
+messages = []
+
+# Add system message if system file exists
+if os.path.exists(args.system):
+    try:
+        with open(args.system, 'r') as f:
+            system_content = f.read().strip()
+            if system_content:
+                messages.append({
+                    'role': 'system',
+                    'content': system_content
+                })
+    except Exception as e:
+        print(f"Warning: Error reading system file '{args.system}': {e}", file=sys.stderr)
+
+# Add user message
+messages.append({
+    'role': 'user',
+    'content': full_prompt
+})
+
 data = {
     'model': 'claude-sonnet-4-20250514',
     'max_tokens': 4096,
-    'messages': [
-        {
-            'role': 'user',
-            'content': full_prompt
-        }
-    ]
+    'messages': messages
 }
 
 response = requests.post(
