@@ -44,7 +44,7 @@ headers = {
 
 data = {
     'model': 'claude-sonnet-4-20250514',
-    'max_tokens': 1024,
+    'max_tokens': 4096,
     'messages': [
         {
             'role': 'user',
@@ -85,3 +85,4 @@ for filename, code_content in matches:
 remaining_output = remaining_output.strip()
 if remaining_output:
     print(remaining_output)
+
