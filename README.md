@@ -1,3 +1,7 @@
+PLEASE NOTE I DIDN'T WRITE THIS README OR ANY OF THE CODE IN THIS REPO. Literally only **this line** was written in an editor. EVERYTHING else including being proud of the stupid pun in the title is 100% AI-generated.
+
+
+
 # Vibeception
 
 A delightfully silly pun on "inception" - this is a vibe coding app that literally codes itself through AI assistance.
