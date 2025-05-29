@@ -72,17 +72,50 @@ remaining_output = output
 for filename, code_content in matches:
     filename = filename.strip()
     if filename and not filename.startswith(' '):  # Skip language-only blocks
-        try:
-            with open(filename, 'w') as f:
-                f.write(code_content)
-            # Remove this code block from the output
-            block_pattern = rf'^```{re.escape(filename)}\n.*?^```'
-            remaining_output = re.sub(block_pattern, '', remaining_output, flags=re.MULTILINE | re.DOTALL, count=1)
-        except Exception as e:
-            print(f"Error writing to file '{filename}': {e}", file=sys.stderr)
+        # Check if this is a search/replace block
+        search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)\n>>>>>>> REPLACE'
+        search_replace_match = re.search(search_replace_pattern, code_content, re.DOTALL)
+        
+        if search_replace_match:
+            # Handle search/replace format
+            search_text = search_replace_match.group(1)
+            replace_text = search_replace_match.group(2)
+            
+            try:
+                # Read the existing file
+                if os.path.exists(filename):
+                    with open(filename, 'r') as f:
+                        file_content = f.read()
+                    
+                    # Perform the replacement
+                    if search_text in file_content:
+                        new_content = file_content.replace(search_text, replace_text)
+                        
+                        # Write the updated content back
+                        with open(filename, 'w') as f:
+                            f.write(new_content)
+                        
+                        print(f"Applied search/replace to {filename}")
+                    else:
+                        print(f"Warning: Search text not found in {filename}", file=sys.stderr)
+                else:
+                    print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
+                    
+            except Exception as e:
+                print(f"Error processing search/replace for '{filename}': {e}", file=sys.stderr)
+        else:
+            # Handle full file replacement (existing behavior)
+            try:
+                with open(filename, 'w') as f:
+                    f.write(code_content)
+            except Exception as e:
+                print(f"Error writing to file '{filename}': {e}", file=sys.stderr)
+        
+        # Remove this code block from the output
+        block_pattern = rf'^```{re.escape(filename)}\n.*?^```'
+        remaining_output = re.sub(block_pattern, '', remaining_output, flags=re.MULTILINE | re.DOTALL, count=1)
 
 # Print remaining output (everything except the processed code blocks)
 remaining_output = remaining_output.strip()
 if remaining_output:
     print(remaining_output)
-
