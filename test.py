@@ -4,6 +4,7 @@ import os
 import json
 import requests
 import argparse
+import re
 
 parser = argparse.ArgumentParser(description='Chat with Claude')
 parser.add_argument('--context', action='append', help='Context file to include')
@@ -59,4 +60,28 @@ response = requests.post(
 )
 
 result = response.json()
-print(result['content'][0]['text'])
+output = result['content'][0]['text']
+
+# Parse output for fenced code blocks with filenames
+pattern = r'^```([^\n]+)\n(.*?)^```'
+matches = re.findall(pattern, output, re.MULTILINE | re.DOTALL)
+
+# Create a copy of the output to remove processed code blocks
+remaining_output = output
+
+for filename, code_content in matches:
+    filename = filename.strip()
+    if filename and not filename.startswith(' '):  # Skip language-only blocks
+        try:
+            with open(filename, 'w') as f:
+                f.write(code_content)
+            # Remove this code block from the output
+            block_pattern = rf'^```{re.escape(filename)}\n.*?^```'
+            remaining_output = re.sub(block_pattern, '', remaining_output, flags=re.MULTILINE | re.DOTALL, count=1)
+        except Exception as e:
+            print(f"Error writing to file '{filename}': {e}", file=sys.stderr)
+
+# Print remaining output (everything except the processed code blocks)
+remaining_output = remaining_output.strip()
+if remaining_output:
+    print(remaining_output)
