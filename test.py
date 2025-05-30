@@ -166,7 +166,21 @@ for filename, code_content in edits:
                 else:
                     print(f"Warning: Search text not found in {filename}", file=sys.stderr)
         else:
-            print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
+            # Check if this is a file creation (blank search text)
+            parts = code_content.split('\n=======\n')
+            if len(parts) == 2:
+                search_text = parts[0].replace('<<<<<<< SEARCH\n', '', 1)
+                replace_text = parts[1].replace('\n>>>>>>> REPLACE', '', 1)
+                
+                if not search_text.strip():
+                    # Create new file with replace content
+                    with open(filename, 'w') as f:
+                        f.write(replace_text)
+                    print(f"Created new file {filename}")
+                else:
+                    print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
+            else:
+                print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
             
     except Exception as e:
         print(f"Error processing search/replace for '{filename}': {e}", file=sys.stderr)
