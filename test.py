@@ -8,6 +8,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Chat with Claude')
 parser.add_argument('--context', action='append', help='Context file to include')
 parser.add_argument('--system', default='system.txt', help='System prompt file (default: system.txt)')
+parser.add_argument('--debug', action='store_true', help='Save API response to reply.json')
 parser.add_argument('prompt', help='The prompt to send')
 
 args = parser.parse_args()
@@ -70,10 +71,12 @@ response = requests.post(
 
 try:
     result = response.json()
+    if args.debug:
+        with open('reply.json', 'w') as f:
+            json.dump(result, f, indent=2)
     output = result['content'][0]['text']
 except KeyError as e:
     print(f"Error: Unable to extract response text. Key error: {e}", file=sys.stderr)
-    print(f"Full response JSON: {json.dumps(result, indent=2)}", file=sys.stderr)
     sys.exit(1)
 except (requests.exceptions.JSONDecodeError, json.JSONDecodeError) as e:
     print(f"Error: Unable to parse response as JSON: {e}", file=sys.stderr)
@@ -81,10 +84,6 @@ except (requests.exceptions.JSONDecodeError, json.JSONDecodeError) as e:
     sys.exit(1)
 except Exception as e:
     print(f"Error: Unexpected error processing response: {e}", file=sys.stderr)
-    try:
-        print(f"Full response JSON: {json.dumps(result, indent=2)}", file=sys.stderr)
-    except:
-        print(f"Raw response: {response.text}", file=sys.stderr)
     sys.exit(1)
 
 def parse_output(output):
