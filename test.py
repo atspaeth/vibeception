@@ -98,19 +98,29 @@ def parse_output(output):
     code_filename = None
     code_lines = []
     fence_depth = 0
-    in_search = False
-    search_lines = []
-    replace_lines = []
+    potential_filename = None
     
-    for line in lines:
+    for i, line in enumerate(lines):
         if line.startswith('```') and not in_code_block:
-            # Start of a code block
-            filename = line[3:].strip()
-            if filename and not filename.startswith(' '):
+            # Check if previous line is a potential filename
+            if potential_filename and not potential_filename.startswith(' '):
+                # Start of a code block with filename on previous line
                 in_code_block = True
-                code_filename = filename
+                code_filename = potential_filename
                 fence_depth = 1
+                # Remove the filename from remaining_output since we're using it
+                if remaining_output and remaining_output[-1] == potential_filename:
+                    remaining_output.pop()
+                potential_filename = None
                 continue
+            else:
+                # Start of a code block with filename after backticks (old format)
+                filename = line[3:].strip()
+                if filename and not filename.startswith(' '):
+                    in_code_block = True
+                    code_filename = filename
+                    fence_depth = 1
+                    continue
                 
         elif line.startswith('```') and in_code_block:
             # End of a code block
@@ -134,6 +144,14 @@ def parse_output(output):
             code_lines.append(line)
             
         else:
+            # Check if this line could be a filename (next line might be ```)
+            if (i + 1 < len(lines) and 
+                lines[i + 1].startswith('```') and 
+                line.strip() and 
+                not line.startswith(' ') and
+                ('.' in line or '/' in line)):  # Basic filename heuristic
+                potential_filename = line.strip()
+            
             remaining_output.append(line)
             
     return edits, '\n'.join(remaining_output)
