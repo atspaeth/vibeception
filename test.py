@@ -4,7 +4,6 @@ import os
 import json
 import requests
 import argparse
-import re
 
 parser = argparse.ArgumentParser(description='Chat with Claude')
 parser.add_argument('--context', action='append', help='Context file to include')
@@ -43,20 +42,17 @@ headers = {
     'content-type': 'application/json'
 }
 
-# Prepare messages array (only user messages)
 messages = [{
     'role': 'user',
     'content': full_prompt
 }]
 
-# Prepare data with system parameter at top level
 data = {
     'model': 'claude-3-5-sonnet-20241022',
     'max_tokens': 4096,
     'messages': messages
 }
 
-# Add system message if system file exists
 if os.path.exists(args.system):
     try:
         with open(args.system, 'r') as f:
@@ -91,60 +87,90 @@ except Exception as e:
         print(f"Raw response: {response.text}", file=sys.stderr)
     sys.exit(1)
 
-# Parse output for fenced code blocks with filenames
-pattern = r'^```([^\n]+)\n(.*?)^```'
-matches = re.findall(pattern, output, re.MULTILINE | re.DOTALL)
-
-# Create a copy of the output to remove processed code blocks
-remaining_output = output
-
-for filename, code_content in matches:
-    filename = filename.strip()
-    if filename and not filename.startswith(' '):  # Skip language-only blocks
-        # Check if this is a search/replace block
-        search_replace_pattern = r'<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)\n>>>>>>> REPLACE'
-        search_replace_match = re.search(search_replace_pattern, code_content, re.DOTALL)
-        
-        if search_replace_match:
-            # Handle search/replace format
-            search_text = search_replace_match.group(1)
-            replace_text = search_replace_match.group(2)
+def parse_output(output):
+    remaining_output = []
+    edits = []
+    
+    lines = output.split('\n')
+    
+    # State tracking
+    in_code_block = False
+    code_filename = None
+    code_lines = []
+    fence_depth = 0
+    in_search = False
+    search_lines = []
+    replace_lines = []
+    
+    for line in lines:
+        if line.startswith('```') and not in_code_block:
+            # Start of a code block
+            filename = line[3:].strip()
+            if filename and not filename.startswith(' '):
+                in_code_block = True
+                code_filename = filename
+                fence_depth = 1
+                continue
+                
+        elif line.startswith('```') and in_code_block:
+            # End of a code block
+            fence_depth -= 1
+            if fence_depth == 0:
+                # Process the collected code block
+                code_content = '\n'.join(code_lines)
+                if '<<<<<<< SEARCH' in code_content and '>>>>>>> REPLACE' in code_content:
+                    edits.append((code_filename, code_content))
+                code_lines = []
+                in_code_block = False
+                code_filename = None
+                continue
+            else:
+                # This is a nested fence - treat as content
+                code_lines.append(line)
+                
+        elif in_code_block:
+            if line.startswith('```'):
+                fence_depth += 1
+            code_lines.append(line)
             
-            try:
-                # Read the existing file
-                if os.path.exists(filename):
-                    with open(filename, 'r') as f:
-                        file_content = f.read()
-                    
-                    # Perform the replacement
-                    if search_text in file_content:
-                        new_content = file_content.replace(search_text, replace_text)
-                        
-                        # Write the updated content back
-                        with open(filename, 'w') as f:
-                            f.write(new_content)
-                        
-                        print(f"Applied search/replace to {filename}")
-                    else:
-                        print(f"Warning: Search text not found in {filename}", file=sys.stderr)
-                else:
-                    print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
-                    
-            except Exception as e:
-                print(f"Error processing search/replace for '{filename}': {e}", file=sys.stderr)
         else:
-            # Handle full file replacement (existing behavior)
-            try:
-                with open(filename, 'w') as f:
-                    f.write(code_content)
-            except Exception as e:
-                print(f"Error writing to file '{filename}': {e}", file=sys.stderr)
-        
-        # Remove this code block from the output
-        block_pattern = rf'^```{re.escape(filename)}\n.*?^```'
-        remaining_output = re.sub(block_pattern, '', remaining_output, flags=re.MULTILINE | re.DOTALL, count=1)
+            remaining_output.append(line)
+            
+    return edits, '\n'.join(remaining_output)
 
-# Print remaining output (everything except the processed code blocks)
-remaining_output = remaining_output.strip()
-if remaining_output:
-    print(remaining_output)
+edits, remaining_output = parse_output(output)
+
+# Process the edits
+for filename, code_content in edits:
+    try:
+        # Read the existing file
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                file_content = f.read()
+            
+            # Extract search and replace content
+            parts = code_content.split('\n=======\n')
+            if len(parts) == 2:
+                search_text = parts[0].replace('<<<<<<< SEARCH\n', '', 1)
+                replace_text = parts[1].replace('\n>>>>>>> REPLACE', '', 1)
+                
+                # Perform the replacement
+                if search_text in file_content:
+                    new_content = file_content.replace(search_text, replace_text)
+                    
+                    # Write the updated content back
+                    with open(filename, 'w') as f:
+                        f.write(new_content)
+                    
+                    print(f"Applied search/replace to {filename}")
+                else:
+                    print(f"Warning: Search text not found in {filename}", file=sys.stderr)
+        else:
+            print(f"Error: File '{filename}' does not exist for search/replace", file=sys.stderr)
+            
+    except Exception as e:
+        print(f"Error processing search/replace for '{filename}': {e}", file=sys.stderr)
+
+# Print remaining output
+if remaining_output.strip():
+    print(remaining_output.strip())
