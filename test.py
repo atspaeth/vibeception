@@ -43,8 +43,18 @@ headers = {
     'content-type': 'application/json'
 }
 
-# Prepare messages array
-messages = []
+# Prepare messages array (only user messages)
+messages = [{
+    'role': 'user',
+    'content': full_prompt
+}]
+
+# Prepare data with system parameter at top level
+data = {
+    'model': 'claude-3-5-sonnet-20241022',
+    'max_tokens': 4096,
+    'messages': messages
+}
 
 # Add system message if system file exists
 if os.path.exists(args.system):
@@ -52,24 +62,9 @@ if os.path.exists(args.system):
         with open(args.system, 'r') as f:
             system_content = f.read().strip()
             if system_content:
-                messages.append({
-                    'role': 'system',
-                    'content': system_content
-                })
+                data['system'] = system_content
     except Exception as e:
         print(f"Warning: Error reading system file '{args.system}': {e}", file=sys.stderr)
-
-# Add user message
-messages.append({
-    'role': 'user',
-    'content': full_prompt
-})
-
-data = {
-    'model': 'claude-sonnet-4-20250514',
-    'max_tokens': 4096,
-    'messages': messages
-}
 
 response = requests.post(
     'https://api.anthropic.com/v1/messages',
