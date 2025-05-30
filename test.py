@@ -77,8 +77,24 @@ response = requests.post(
     json=data
 )
 
-result = response.json()
-output = result['content'][0]['text']
+try:
+    result = response.json()
+    output = result['content'][0]['text']
+except KeyError as e:
+    print(f"Error: Unable to extract response text. Key error: {e}", file=sys.stderr)
+    print(f"Full response JSON: {json.dumps(result, indent=2)}", file=sys.stderr)
+    sys.exit(1)
+except (requests.exceptions.JSONDecodeError, json.JSONDecodeError) as e:
+    print(f"Error: Unable to parse response as JSON: {e}", file=sys.stderr)
+    print(f"Raw response: {response.text}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Error: Unexpected error processing response: {e}", file=sys.stderr)
+    try:
+        print(f"Full response JSON: {json.dumps(result, indent=2)}", file=sys.stderr)
+    except:
+        print(f"Raw response: {response.text}", file=sys.stderr)
+    sys.exit(1)
 
 # Parse output for fenced code blocks with filenames
 pattern = r'^```([^\n]+)\n(.*?)^```'
